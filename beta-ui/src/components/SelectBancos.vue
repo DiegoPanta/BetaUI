@@ -12,9 +12,9 @@
       <option
         v-for="bank in banks"
         :key="bank.cnpj"
-        :value="bank.name"
+        :value="bank.cnpj"
       >
-        {{ bank.name }} - {{ bank.cnpj }}
+        {{ bank.bankName }} - {{ bank.cnpj }}
       </option>
     </select>
     <div v-if="hasError" class="invalid-feedback">
@@ -24,6 +24,7 @@
 </template>
 
 <script>
+import { getBanks } from '@/services/loanSimulatorApi';
 export default {
   props: {
     modelValue: {
@@ -34,15 +35,9 @@ export default {
   emits: ["update:modelValue"],
   data() {
     return {
+      banks: [],
       selectedBank: this.modelValue,
       hasError: false,
-      banks: [
-        { name: "Banco do Brasil", cnpj: "00.000.000/0001-91" },
-        { name: "Caixa Econômica Federal", cnpj: "00.360.305/0001-04" },
-        { name: "Bradesco", cnpj: "60.746.948/0001-12" },
-        { name: "Itaú Unibanco", cnpj: "60.701.190/0001-04" },
-        { name: "Santander", cnpj: "90.400.888/0001-42" }
-      ]
     };
   },
   watch: {
@@ -50,13 +45,25 @@ export default {
       this.$emit("update:modelValue", value);
     }
   },
+  mounted() {
+    this.fetchBanks();
+  },
   methods: {
     handleSelection() {
       this.validate();
     },
     validate() {
       this.hasError = this.selectedBank === "";
-    }
+    },
+    async fetchBanks() {
+      try {
+        const response = await getBanks();
+        this.banks = response.data;
+      } catch (error) {
+        this.hasError = true;
+        console.error('Erro ao carregar os bancos:', error);
+      }
+    },
   }
 };
 </script>

@@ -1,4 +1,5 @@
 <script>
+import { simulateLoan } from '@/services/loanSimulatorApi';
 import InputName from '@/components/InputName.vue'
 import InputCpfCnpj from '@/components/InputCpfCnpj.vue'
 import InputEmail from '@/components/InputEmail.vue'
@@ -23,10 +24,12 @@ export default {
       quantidadeParcelas: '',
       valorEmprestimo: '',
       selectedBank: '',
+      loading: false,
+      error: null,
     }
   },
   methods: {
-    handleSubmit() {
+    async handleSubmit() {
       if (
         this.valueName.trim() &&
         this.valueCpfCnpj.trim() &&
@@ -35,14 +38,29 @@ export default {
         parseFloat(this.valorEmprestimo.trim()) > 0 &&
         this.selectedBank
       ) {
-        console.log('Dados enviados:', {
+        const data = {
           name: this.valueName,
-          cpfCnpj: this.valueCpfCnpj,
+          taxId: this.valueCpfCnpj,
           email: this.valueEmail,
-          quantidadeParcelas: this.quantidadeParcelas,
-          valorEmprestimo: this.valorEmprestimo,
-          bancoSelecionado: this.selectedBank,
-        })
+          bankId: this.selectedBank,
+          loanAmount: this.valorEmprestimo,
+          installments: this.quantidadeParcelas,
+        };
+        try {
+          this.loading = true;
+          this.error = null;
+
+          const response = await simulateLoan(data);
+
+          console.log('Resposta da API:', response.data);
+
+          alert('Empréstimo simulado com sucesso!');
+        } catch (error) {
+          this.error = error.response ? error.response.data : 'Erro ao realizar a solicitação.';
+          console.error('Erro ao enviar os dados:', error);
+        } finally {
+          this.loading = false;
+        }
       } else {
         console.error('Preencha todos os campos corretamente.')
       }
