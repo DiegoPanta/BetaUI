@@ -14,7 +14,7 @@
         :key="bank.cnpj"
         :value="bank.cnpj"
       >
-        {{ bank.bankName }} - {{ bank.cnpj }}
+        {{ bank.bankName }}
       </option>
     </select>
     <div v-if="hasError" class="invalid-feedback">

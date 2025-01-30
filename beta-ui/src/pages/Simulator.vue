@@ -1,11 +1,112 @@
+<template>
+  <div class="container mt-4">
+    <!-- Modal -->
+    <div v-if="isModalVisible" class="modal fade" id="loanModal" tabindex="-1" aria-labelledby="loanModalLabel"
+      aria-hidden="true">
+      <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+          <div class="modal-header bg-success text-white">
+            <h5 class="modal-title" id="loanModalLabel">Simulação de Empréstimo</h5>
+            <button type="button" class="btn-close btn-close-white" @click="closeModal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row mb-3">
+              <div class="col-md-4">
+                <InputName v-model="valueName" />
+              </div>
+              <div class="col-md-4">
+                <InputCpfCnpj v-model="valueCpfCnpj" />
+              </div>
+              <div class="col-md-4">
+                <InputEmail v-model="valueEmail" />
+              </div>
+            </div>
+            <div class="row mb-3">
+              <div class="col-md-4">
+                <InputParcelas v-model="quantidadeParcelas" />
+              </div>
+              <div class="col-md-4">
+                <InputValorEmprestimo v-model="valorEmprestimo" />
+              </div>
+              <div class="col-md-4">
+                <SelectBancos v-model="selectedBank" />
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" @click="closeModal">Fechar</button>
+            <button @click="handleSubmit" type="button" class="btn btn-primary">Simular</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabela de Resultados -->
+    <div class="rounded-2 mt-4">
+      <p v-if="error" class="text-danger">{{ error }}</p>
+      <div class="card">
+        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+          <h5>Resultados da Simulação:</h5>
+          <button @click="newSimulation"
+            class="btn btn-outline-success bg-white btn-sm ms-auto text-success border-success hover-text-dark hover:border-dark">
+            Nova Simulação
+            <font-awesome-icon :icon="['fas', 'plus']" />
+          </button>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive border-top" v-if="loanData && Object.keys(loanData).length">
+            <table class="table table-hover">
+              <thead class="table-success">
+                <tr>
+                  <th scope="col">Valor do Empréstimo</th>
+                  <th scope="col">Quantidade de Parcelas</th>
+                  <th scope="col">Mensalidade</th>
+                  <th scope="col">Custo Total dos Meses</th>
+                  <th scope="col">Custo Anual</th>
+                  <th scope="col">Custo Total dos Anos</th>
+                  <th scope="col">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(loan, index) in loanData" :key="index">
+                  <td>{{ loan.loanAmount }}</td>
+                  <td>{{ loan.installments }}</td>
+                  <td>{{ loan.monthlyInstallment }}</td>
+                  <td>{{ loan.totalCostMonth }}</td>
+                  <td>{{ loan.totalAnnualCost }}</td>
+                  <td>{{ loan.finalCostYears }}</td>
+                  <td>
+                    <button @click="deleteLoan(index)" class="btn btn-danger btn-sm fa fa-trash">
+                      <font-awesome-icon :icon="['fas', 'trash']" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Se não houver registro exibe a mensagem "Sem registro" -->
+          <div v-else class="text-center text-muted">
+            <p>Sem registro</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</template>
+
 <script>
 import { simulateLoan } from '@/services/loanSimulatorApi';
+import { getSimulateLoan } from '../services/loanSimulatorApi';
+import { deleteSimulateLoan } from '../services/loanSimulatorApi';
 import InputName from '@/components/InputName.vue'
 import InputCpfCnpj from '@/components/InputCpfCnpj.vue'
 import InputEmail from '@/components/InputEmail.vue'
 import InputParcelas from '@/components/InputParcelas.vue'
 import InputValorEmprestimo from '@/components/InputValorEmprestimo.vue'
 import SelectBancos from '@/components/SelectBancos.vue'
+import { Modal } from 'bootstrap';
+import { nextTick } from 'vue';
 
 export default {
   components: {
@@ -23,13 +124,40 @@ export default {
       valueEmail: '',
       quantidadeParcelas: '',
       valorEmprestimo: '',
-      selectedBank: '',
-      loading: false,
-      error: null,
+      selectedBank: [],
       loanData: null,
-    }
+      isModalVisible: false,
+      error: null,
+      loading: false,
+      modalInstance: null,
+    };
+  },
+  mounted() {
+    this.getSimulation();
   },
   methods: {
+    openModal() {
+      this.isModalVisible = true;
+
+      this.$nextTick(() => {
+        const modalElement = document.getElementById('loanModal');
+
+        this.modalInstance = new Modal(modalElement, {
+          backdrop: 'static',
+          keyboard: false,
+        });
+
+        this.modalInstance.show();
+      });
+    },
+
+    closeModal() {
+      this.isModalVisible = false;
+      if (this.modalInstance) {
+        this.modalInstance.hide();
+      }
+    },
+
     async handleSubmit() {
       if (
         this.valueName.trim() &&
@@ -47,122 +175,62 @@ export default {
           loanAmount: this.valorEmprestimo,
           installments: this.quantidadeParcelas,
         };
+
         try {
           this.loading = true;
-          this.error = null;
+          await simulateLoan(data);
+          await this.getSimulation();
 
-          const response = await simulateLoan(data);
-
-          console.log('Resposta da API:', response.data);
-          // Armazenar os dados retornados da simulação
-          this.loanData = {
-            installments: response.data.installments,
-            loanAmount: response.data.loanAmount,
-            monthlyInstallment: response.data.monthlyInstallment,
-            totalCostMonth: response.data.totalCostMonth,
-            totalAnnualCost: response.data.totalAnnualCost,
-            finalCostYears: response.data.finalCostYears,
-          };
           alert('Empréstimo simulado com sucesso!');
         } catch (error) {
           this.error = error.response ? error.response.data : 'Erro ao realizar a solicitação.';
           console.error('Erro ao enviar os dados:', error);
         } finally {
           this.loading = false;
+
+          this.closeModal();
         }
       } else {
-        console.error('Preencha todos os campos corretamente.')
+        console.error('Preencha todos os campos corretamente.');
       }
     },
-    // Método para limpar os dados e resetar o formulário
-    resetSimulation() {
+    async deleteLoan(index) {
+      if (confirm('Você tem certeza que deseja excluir esta simulação?')) {
+        const loanId = this.loanData[index].id;
+
+        try {
+          await deleteSimulateLoan(loanId);
+          this.getSimulation();
+          alert('Simulação excluída com sucesso!');
+        } catch (error) {
+          console.error('Erro ao excluir a simulação:', error);
+          alert('Ocorreu um erro ao tentar excluir a simulação.');
+        }
+      }
+    },
+    async getSimulation() {
+      try {
+        const data = await getSimulateLoan();
+        this.loanData = data;
+      } catch (error) {
+        console.error('Erro ao buscar dados de simulação:', error);
+      }
+    },
+
+    newSimulation() {
+      this.loanData = null;
       this.valueName = '';
       this.valueCpfCnpj = '';
       this.valueEmail = '';
       this.quantidadeParcelas = '';
       this.valorEmprestimo = '';
       this.selectedBank = '';
-      this.loanData = null;
+
+      this.openModal();
     },
   },
-}
+};
 </script>
-<template>
-  <div class="container mt-4">
-    <div v-if="!loanData" class="card">
-      <div class="card-header bg-success text-white d-flex justify-content-center align-items-center py-2">
-        <h5>Simulação de Empréstimo</h5>
-      </div>
-      <div class="card-body">
-        <div class="row mb-3">
-          <div class="col-md-4">
-            <InputName v-model="valueName" />
-          </div>
-          <div class="col-md-4">
-            <InputCpfCnpj v-model="valueCpfCnpj" />
-          </div>
-          <div class="col-md-4">
-            <InputEmail v-model="valueEmail" />
-          </div>
-        </div>
-        <div class="row mb-3">
-          <div class="col-md-4">
-            <InputParcelas v-model="quantidadeParcelas" />
-          </div>
-          <div class="col-md-4">
-            <InputValorEmprestimo v-model="valorEmprestimo" />
-          </div>
-          <div class="col-md-4">
-            <SelectBancos v-model="selectedBank" />
-          </div>
-        </div>
-        <div class="text-center">
-          <button @click="handleSubmit" class="btn btn-primary">Simular</button>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="loanData" class="rounded-2 mt-4">
-      <p v-if="error" class="text-danger">{{ error }}</p>
-      <div class="card">
-        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-          <h5>Resultados da Simulação:</h5>
-          <button @click="resetSimulation"
-            class="btn btn-outline-success bg-white btn-sm ms-auto text-success border-success hover-text-dark hover:border-dark">
-            Nova Simulação
-            <font-awesome-icon :icon="['fas', 'plus']" />
-          </button>
-        </div>
-        <div class="card-body">
-          <div class="table-responsive border-top">
-            <table class="table table-hover">
-              <thead class="table-success">
-                <tr>
-                  <th scope="col">Valor do Emprestimo</th>
-                  <th scope="col">Quantidade de Parcelas</th>
-                  <th scope="col">Mensalidade</th>
-                  <th scope="col">Custo Total dos Meses</th>
-                  <th scope="col">Custo Anual</th>
-                  <th scope="col">Custo Total dos Anos</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>{{ loanData.loanAmount }}</td>
-                  <td>{{ loanData.installments }}</td>
-                  <td>{{ loanData.monthlyInstallment }}</td>
-                  <td>{{ loanData.totalCostMonth }}</td>
-                  <td>{{ loanData.totalAnnualCost }}</td>
-                  <td>{{ loanData.finalCostYears }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
 
 <style scoped>
 /* Estilização extra opcional */
